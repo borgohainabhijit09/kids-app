@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, Suspense } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Header } from '@/components/Header';
 import { StudentJoin } from '@/components/StudentJoin';
@@ -11,9 +11,20 @@ function StudentPageContent() {
   const initialCode = searchParams.get('code') || '';
 
   const [activeCode, setActiveCode] = useState<string | null>(null);
+  const [studentId, setStudentId] = useState<string>('');
+  const [studentName, setStudentName] = useState<string>('');
 
-  const handleJoined = (code: string) => {
+  useEffect(() => {
+    const savedName = localStorage.getItem('dads_quiz_student_name');
+    const savedId = localStorage.getItem('dads_quiz_student_id');
+    if (savedName) setStudentName(savedName);
+    if (savedId) setStudentId(savedId);
+  }, []);
+
+  const handleJoined = (code: string, id: string, name: string) => {
     setActiveCode(code);
+    setStudentId(id);
+    setStudentName(name);
   };
 
   const handleReset = () => {
@@ -25,15 +36,20 @@ function StudentPageContent() {
       <Header roomCode={activeCode || undefined} role="student" />
 
       <main className="flex-1 max-w-4xl w-full mx-auto p-4 sm:p-8">
-        {!activeCode ? (
+        {!activeCode || !studentId ? (
           <StudentJoin initialCode={initialCode} onJoined={handleJoined} />
         ) : (
-          <StudentQuiz roomCode={activeCode} onReset={handleReset} />
+          <StudentQuiz
+            roomCode={activeCode}
+            studentId={studentId}
+            studentName={studentName}
+            onReset={handleReset}
+          />
         )}
       </main>
 
       <footer className="border-t border-slate-900 py-4 px-6 text-center text-xs text-slate-500 font-medium">
-        Dad's Quiz • Student Room • Class 2 Remote Learning
+        Dad's Quiz • Student Competition Room • Class 2 Learning
       </footer>
     </div>
   );

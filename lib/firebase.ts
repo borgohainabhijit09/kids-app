@@ -9,7 +9,7 @@ import {
   onDisconnect,
   Database
 } from 'firebase/database';
-import { QuizRoom, Question, StudentState } from './types';
+import { QuizRoom, Question, StudentState, QuizMode } from './types';
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -21,7 +21,6 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
 
-// Initialize Firebase App singleton
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 let db: Database | null = null;
 
@@ -31,9 +30,8 @@ try {
   console.warn('Firebase Realtime Database initialization error:', error);
 }
 
-// Generate random 6-character Room Code (e.g. K7X4P9)
 export function generateRoomCode(): string {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Avoid confusing characters like O, 0, I, 1
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let code = '';
   for (let i = 0; i < 6; i++) {
     code += chars.charAt(Math.floor(Math.random() * chars.length));
@@ -41,34 +39,51 @@ export function generateRoomCode(): string {
   return code;
 }
 
-// Fallback in-memory store if database is offline or not configured
+// Speed Scoring Formula: Base 1000 pts + Up to 500 Speed Bonus pts (Max 30s window)
+export function calculateQuestionScore(
+  isCorrect: boolean,
+  questionStartTime: number | null,
+  answerTimestamp: number | null
+): number {
+  if (!isCorrect) return 0;
+  if (!questionStartTime || !answerTimestamp) return 1000;
+
+  const elapsedSeconds = Math.max(0, (answerTimestamp - questionStartTime) / 1000);
+  const maxTimeSeconds = 30; // 30-second window for speed bonus
+  const speedRatio = Math.max(0, 1 - Math.min(elapsedSeconds, maxTimeSeconds) / maxTimeSeconds);
+  const speedBonus = Math.round(500 * speedRatio);
+  return 1000 + speedBonus; // 1,000 to 1,500 points
+}
+
+// Fallback memory store
 const memoryRooms: Record<string, QuizRoom> = {};
 const memoryListeners: Record<string, Set<(room: QuizRoom | null) => void>> = {};
 
 function notifyMemoryListeners(code: string) {
   const room = memoryRooms[code] || null;
   if (memoryListeners[code]) {
-    memoryListeners[code].forEach((cb) => cb(room ? { ...room } : null));
+    memoryListeners[code].forEach((cb) => cb(room ? JSON.parse(JSON.stringify(room)) : null));
   }
 }
 
 // Create a new quiz room
-export async function createRoom(title: string, questions: Question[]): Promise<string> {
+export async function createRoom(
+  title: string,
+  questions: Question[],
+  mode: QuizMode = 'multiplayer'
+): Promise<string> {
   const code = generateRoomCode();
   const newRoom: QuizRoom = {
     id: code,
     title,
+    mode,
     status: 'waiting',
     currentQuestion: 0,
+    questionStartTime: null,
     revealed: false,
     createdAt: Date.now(),
     questions,
-    student: {
-      connected: false,
-      answer: null,
-      answered: false,
-      score: 0,
-    },
+    students: {},
   };
 
   memoryRooms[code] = newRoom;
@@ -99,10 +114,9 @@ export function subscribeToRoom(
       roomRef,
       (snapshot) => {
         if (snapshot.exists()) {
-          const val = snapshot.val();
-          callback(val as QuizRoom);
+          const val = snapshot.val() as QuizRoom;
+          callback(val);
         } else {
-          // Fall back to memory if snapshot is null
           callback(memoryRooms[cleanCode] || null);
         }
       },
@@ -115,7 +129,6 @@ export function subscribeToRoom(
     return () => unsubscribe();
   }
 
-  // Memory fallback subscription
   if (!memoryListeners[cleanCode]) {
     memoryListeners[cleanCode] = new Set();
   }
@@ -127,71 +140,104 @@ export function subscribeToRoom(
   };
 }
 
-// Student joins room
-export async function joinRoom(code: string): Promise<{ success: boolean; error?: string }> {
+// Student joins room with name
+export async function joinRoom(
+  code: string,
+  studentName: string,
+  existingStudentId?: string
+): Promise<{ success: boolean; studentId?: string; error?: string }> {
   const cleanCode = code.trim().toUpperCase();
+  const studentId = existingStudentId || `student_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+  const cleanName = studentName.trim() || 'Player';
+
+  const newStudentState: StudentState = {
+    id: studentId,
+    name: cleanName,
+    connected: true,
+    answer: null,
+    answered: false,
+    answerTime: null,
+    lastPointsGained: 0,
+    totalScore: 0,
+  };
 
   if (db) {
     try {
       const roomRef = ref(db, `rooms/${cleanCode}`);
       const snapshot = await get(roomRef);
       if (!snapshot.exists()) {
-        return { success: false, error: 'Quiz room not found. Please double-check the code!' };
+        return { success: false, error: 'Quiz room not found. Please check code!' };
       }
 
       const roomData = snapshot.val() as QuizRoom;
       if (roomData.status === 'finished') {
-        return { success: false, error: 'This quiz has already finished.' };
+        return { success: false, error: 'This quiz competition has already finished.' };
       }
 
-      const studentRef = ref(db, `rooms/${cleanCode}/student`);
-      await update(studentRef, { connected: true });
+      // Check if student already exists in room
+      const existingStudent = roomData.students?.[studentId];
+      if (existingStudent) {
+        newStudentState.totalScore = existingStudent.totalScore || 0;
+        newStudentState.answer = existingStudent.answer ?? null;
+        newStudentState.answered = existingStudent.answered ?? false;
+        newStudentState.answerTime = existingStudent.answerTime ?? null;
+        newStudentState.lastPointsGained = existingStudent.lastPointsGained || 0;
+      }
+
+      const studentRef = ref(db, `rooms/${cleanCode}/students/${studentId}`);
+      await set(studentRef, newStudentState);
       onDisconnect(studentRef).update({ connected: false });
 
       if (roomData.status === 'waiting') {
         await update(roomRef, { status: 'ready' });
       }
 
-      return { success: true };
+      return { success: true, studentId };
     } catch (e) {
-      console.warn('Firebase join error, checking memory fallback:', e);
+      console.warn('Firebase join error, using memory fallback:', e);
     }
   }
 
+  // Memory fallback
   if (memoryRooms[cleanCode]) {
-    memoryRooms[cleanCode].student = {
-      ...(memoryRooms[cleanCode].student || { answer: null, answered: false, score: 0 }),
-      connected: true,
-    };
+    if (!memoryRooms[cleanCode].students) {
+      memoryRooms[cleanCode].students = {};
+    }
+    const existing = memoryRooms[cleanCode].students![studentId];
+    if (existing) {
+      newStudentState.totalScore = existing.totalScore || 0;
+      newStudentState.answer = existing.answer ?? null;
+      newStudentState.answered = existing.answered ?? false;
+      newStudentState.answerTime = existing.answerTime ?? null;
+    }
+    memoryRooms[cleanCode].students![studentId] = newStudentState;
     if (memoryRooms[cleanCode].status === 'waiting') {
       memoryRooms[cleanCode].status = 'ready';
     }
     notifyMemoryListeners(cleanCode);
-    return { success: true };
+    return { success: true, studentId };
   }
 
-  return { success: false, error: 'Quiz room not found. Please check code with Dad!' };
+  return { success: false, error: 'Quiz room not found. Please check code with Host!' };
 }
 
 // Host starts quiz
 export async function startQuiz(code: string): Promise<void> {
   const cleanCode = code.trim().toUpperCase();
-
-  const updates = {
-    status: 'playing',
-    currentQuestion: 0,
-    revealed: false,
-    'student/answer': null,
-    'student/answered': false,
-  };
+  const startTime = Date.now();
 
   if (memoryRooms[cleanCode]) {
     memoryRooms[cleanCode].status = 'playing';
     memoryRooms[cleanCode].currentQuestion = 0;
+    memoryRooms[cleanCode].questionStartTime = startTime;
     memoryRooms[cleanCode].revealed = false;
-    if (memoryRooms[cleanCode].student) {
-      memoryRooms[cleanCode].student.answer = null;
-      memoryRooms[cleanCode].student.answered = false;
+    if (memoryRooms[cleanCode].students) {
+      Object.keys(memoryRooms[cleanCode].students!).forEach((id) => {
+        memoryRooms[cleanCode].students![id].answer = null;
+        memoryRooms[cleanCode].students![id].answered = false;
+        memoryRooms[cleanCode].students![id].answerTime = null;
+        memoryRooms[cleanCode].students![id].lastPointsGained = 0;
+      });
     }
     notifyMemoryListeners(cleanCode);
   }
@@ -199,7 +245,26 @@ export async function startQuiz(code: string): Promise<void> {
   if (db) {
     try {
       const roomRef = ref(db, `rooms/${cleanCode}`);
-      await update(roomRef, updates);
+      const snapshot = await get(roomRef);
+      const roomData = snapshot.val() as QuizRoom;
+
+      const studentUpdates: Record<string, any> = {};
+      if (roomData.students) {
+        Object.keys(roomData.students).forEach((sId) => {
+          studentUpdates[`students/${sId}/answer`] = null;
+          studentUpdates[`students/${sId}/answered`] = false;
+          studentUpdates[`students/${sId}/answerTime`] = null;
+          studentUpdates[`students/${sId}/lastPointsGained`] = 0;
+        });
+      }
+
+      await update(roomRef, {
+        status: 'playing',
+        currentQuestion: 0,
+        questionStartTime: startTime,
+        revealed: false,
+        ...studentUpdates,
+      });
     } catch (e) {
       console.warn('Error starting quiz in Firebase:', e);
     }
@@ -207,21 +272,29 @@ export async function startQuiz(code: string): Promise<void> {
 }
 
 // Student submits answer
-export async function submitAnswer(code: string, answerIndex: number): Promise<void> {
+export async function submitAnswer(
+  code: string,
+  studentId: string,
+  answerIndex: number
+): Promise<void> {
   const cleanCode = code.trim().toUpperCase();
+  const submitTime = Date.now();
 
-  if (memoryRooms[cleanCode] && memoryRooms[cleanCode].student) {
-    memoryRooms[cleanCode].student.answer = answerIndex;
-    memoryRooms[cleanCode].student.answered = true;
+  if (memoryRooms[cleanCode]?.students?.[studentId]) {
+    const s = memoryRooms[cleanCode].students![studentId];
+    s.answer = answerIndex;
+    s.answered = true;
+    s.answerTime = submitTime;
     notifyMemoryListeners(cleanCode);
   }
 
   if (db) {
     try {
-      const studentRef = ref(db, `rooms/${cleanCode}/student`);
+      const studentRef = ref(db, `rooms/${cleanCode}/students/${studentId}`);
       await update(studentRef, {
         answer: answerIndex,
         answered: true,
+        answerTime: submitTime,
       });
     } catch (e) {
       console.warn('Error submitting answer to Firebase:', e);
@@ -229,15 +302,21 @@ export async function submitAnswer(code: string, answerIndex: number): Promise<v
   }
 }
 
-// Host reveals answer
-export async function revealAnswer(code: string, isCorrect: boolean, currentScore: number): Promise<void> {
+// Host reveals answer & calculates speed-based scores for all students
+export async function revealAnswer(code: string): Promise<void> {
   const cleanCode = code.trim().toUpperCase();
-  const newScore = isCorrect ? currentScore + 1 : currentScore;
 
   if (memoryRooms[cleanCode]) {
-    memoryRooms[cleanCode].revealed = true;
-    if (memoryRooms[cleanCode].student) {
-      memoryRooms[cleanCode].student.score = newScore;
+    const room = memoryRooms[cleanCode];
+    room.revealed = true;
+    const currentQ = room.questions[room.currentQuestion];
+    if (currentQ && room.students) {
+      Object.values(room.students).forEach((st) => {
+        const isCorrect = st.answer === currentQ.correctAnswer;
+        const ptsGained = calculateQuestionScore(isCorrect, room.questionStartTime, st.answerTime);
+        st.lastPointsGained = ptsGained;
+        st.totalScore = (st.totalScore || 0) + ptsGained;
+      });
     }
     notifyMemoryListeners(cleanCode);
   }
@@ -245,10 +324,29 @@ export async function revealAnswer(code: string, isCorrect: boolean, currentScor
   if (db) {
     try {
       const roomRef = ref(db, `rooms/${cleanCode}`);
-      await update(roomRef, {
-        revealed: true,
-        'student/score': newScore,
-      });
+      const snapshot = await get(roomRef);
+      if (snapshot.exists()) {
+        const roomData = snapshot.val() as QuizRoom;
+        const currentQ = roomData.questions[roomData.currentQuestion];
+
+        const updates: Record<string, any> = { revealed: true };
+
+        if (currentQ && roomData.students) {
+          Object.values(roomData.students).forEach((st) => {
+            const isCorrect = st.answer === currentQ.correctAnswer;
+            const ptsGained = calculateQuestionScore(
+              isCorrect,
+              roomData.questionStartTime,
+              st.answerTime
+            );
+            const newTotal = (st.totalScore || 0) + ptsGained;
+            updates[`students/${st.id}/lastPointsGained`] = ptsGained;
+            updates[`students/${st.id}/totalScore`] = newTotal;
+          });
+        }
+
+        await update(roomRef, updates);
+      }
     } catch (e) {
       console.warn('Error revealing answer in Firebase:', e);
     }
@@ -258,13 +356,20 @@ export async function revealAnswer(code: string, isCorrect: boolean, currentScor
 // Host advances to next question
 export async function nextQuestion(code: string, nextIndex: number): Promise<void> {
   const cleanCode = code.trim().toUpperCase();
+  const startTime = Date.now();
 
   if (memoryRooms[cleanCode]) {
-    memoryRooms[cleanCode].currentQuestion = nextIndex;
-    memoryRooms[cleanCode].revealed = false;
-    if (memoryRooms[cleanCode].student) {
-      memoryRooms[cleanCode].student.answer = null;
-      memoryRooms[cleanCode].student.answered = false;
+    const room = memoryRooms[cleanCode];
+    room.currentQuestion = nextIndex;
+    room.questionStartTime = startTime;
+    room.revealed = false;
+    if (room.students) {
+      Object.values(room.students).forEach((st) => {
+        st.answer = null;
+        st.answered = false;
+        st.answerTime = null;
+        st.lastPointsGained = 0;
+      });
     }
     notifyMemoryListeners(cleanCode);
   }
@@ -272,11 +377,24 @@ export async function nextQuestion(code: string, nextIndex: number): Promise<voi
   if (db) {
     try {
       const roomRef = ref(db, `rooms/${cleanCode}`);
+      const snapshot = await get(roomRef);
+      const roomData = snapshot.val() as QuizRoom;
+
+      const studentUpdates: Record<string, any> = {};
+      if (roomData.students) {
+        Object.keys(roomData.students).forEach((sId) => {
+          studentUpdates[`students/${sId}/answer`] = null;
+          studentUpdates[`students/${sId}/answered`] = false;
+          studentUpdates[`students/${sId}/answerTime`] = null;
+          studentUpdates[`students/${sId}/lastPointsGained`] = 0;
+        });
+      }
+
       await update(roomRef, {
         currentQuestion: nextIndex,
+        questionStartTime: startTime,
         revealed: false,
-        'student/answer': null,
-        'student/answered': false,
+        ...studentUpdates,
       });
     } catch (e) {
       console.warn('Error advancing question in Firebase:', e);

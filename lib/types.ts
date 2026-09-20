@@ -1,10 +1,11 @@
 export type RoomStatus =
-  | 'waiting'   // Waiting for child to join
-  | 'ready'     // Child connected, parent ready to start
+  | 'waiting'   // Waiting for students to join
+  | 'ready'     // Students connected, host ready to start
   | 'playing'   // Quiz in progress, question active
-  | 'answering' // Child selected an answer, waiting for parent reveal
-  | 'revealed'  // Parent revealed answer result
+  | 'revealed'  // Host revealed answer result & leaderboard
   | 'finished'; // Quiz complete
+
+export type QuizMode = '1on1' | 'multiplayer';
 
 export interface Question {
   id: string;
@@ -14,19 +15,28 @@ export interface Question {
 }
 
 export interface StudentState {
+  id: string;
+  name: string;
   connected: boolean;
   answer: number | null; // Selected option index (0-3) or null
   answered: boolean;
-  score: number;
+  answerTime: number | null; // Timestamp when answer was submitted
+  lastPointsGained: number; // Points gained on current question (including speed bonus)
+  totalScore: number; // Cumulative points across all questions
 }
 
 export interface QuizRoom {
   id?: string;
   title: string;
+  mode: QuizMode;
   status: RoomStatus;
   currentQuestion: number;
+  questionStartTime: number | null; // Timestamp when active question started
   revealed: boolean;
   createdAt: number;
   questions: Question[];
+  // Map of student ID to student state (or single student fallback)
+  students?: Record<string, StudentState>;
+  // Backwards compatibility single student alias
   student?: StudentState;
 }

@@ -1,16 +1,17 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Question } from '@/lib/types';
+import { Question, QuizMode } from '@/lib/types';
 import { DEMO_QUIZZES } from '@/lib/demoData';
-import { Plus, Trash2, ArrowUp, ArrowDown, Sparkles, CheckCircle, HelpCircle } from 'lucide-react';
+import { Plus, Trash2, ArrowUp, ArrowDown, Sparkles, School, User } from 'lucide-react';
 
 interface QuizCreatorProps {
-  onCreateRoom: (title: string, questions: Question[]) => void;
+  onCreateRoom: (title: string, questions: Question[], mode: QuizMode) => void;
 }
 
 export function QuizCreator({ onCreateRoom }: QuizCreatorProps) {
   const [title, setTitle] = useState('Class 2 General Knowledge');
+  const [mode, setMode] = useState<QuizMode>('multiplayer');
   const [questions, setQuestions] = useState<Question[]>(DEMO_QUIZZES[0].questions);
 
   // Active edit state for a single question
@@ -51,7 +52,6 @@ export function QuizCreator({ onCreateRoom }: QuizCreatorProps) {
       setQuestions([...questions, newQuestion]);
     }
 
-    // Reset form fields
     setQText('');
     setOptA('');
     setOptB('');
@@ -94,26 +94,26 @@ export function QuizCreator({ onCreateRoom }: QuizCreatorProps) {
       alert('Please add at least 1 question to your quiz!');
       return;
     }
-    onCreateRoom(title.trim(), questions);
+    onCreateRoom(title.trim(), questions, mode);
   };
 
   return (
     <div className="w-full max-w-4xl mx-auto space-y-8 py-4">
       {/* Quiz Details Header Box */}
-      <div className="bg-slate-900/90 border border-amber-500/30 rounded-2xl p-6 shadow-xl space-y-4">
+      <div className="bg-slate-900/90 border border-amber-500/30 rounded-2xl p-6 shadow-xl space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h2 className="text-2xl font-black text-white flex items-center gap-2">
               📝 Create Quiz Room
             </h2>
             <p className="text-xs sm:text-sm text-slate-400">
-              Prepare objective questions for your child. Create custom questions or pick a sample preset.
+              Prepare objective questions for 1-on-1 playing or multi-student classroom competition!
             </p>
           </div>
 
           {/* Preset Pickers */}
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-xs text-amber-400 font-bold uppercase">Preset:</span>
+            <span className="text-xs text-amber-400 font-bold uppercase">Presets:</span>
             {DEMO_QUIZZES.map((demo, idx) => (
               <button
                 key={idx}
@@ -128,6 +128,51 @@ export function QuizCreator({ onCreateRoom }: QuizCreatorProps) {
           </div>
         </div>
 
+        {/* Mode Selector */}
+        <div className="space-y-2">
+          <label className="block text-xs font-extrabold uppercase text-amber-400 tracking-wider">
+            Select Game Mode
+          </label>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <button
+              type="button"
+              onClick={() => setMode('multiplayer')}
+              className={`p-4 rounded-xl border-2 text-left transition-all ${
+                mode === 'multiplayer'
+                  ? 'bg-amber-950/80 border-amber-400 text-amber-100 kbc-glow-gold'
+                  : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700'
+              }`}
+            >
+              <div className="flex items-center space-x-2 font-black text-lg text-white mb-1">
+                <School className="w-5 h-5 text-amber-400" />
+                <span>🏫 Classroom Competition Mode</span>
+              </div>
+              <p className="text-xs text-slate-300">
+                Multiple students join with names. Includes ⚡ Speed-Based Scoring, Live Leaderboard, and Winner Podium!
+              </p>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setMode('1on1')}
+              className={`p-4 rounded-xl border-2 text-left transition-all ${
+                mode === '1on1'
+                  ? 'bg-amber-950/80 border-amber-400 text-amber-100 kbc-glow-gold'
+                  : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700'
+              }`}
+            >
+              <div className="flex items-center space-x-2 font-black text-lg text-white mb-1">
+                <User className="w-5 h-5 text-amber-400" />
+                <span>👨‍👦 1-on-1 Dad's Quiz Mode</span>
+              </div>
+              <p className="text-xs text-slate-300">
+                Single student quiz with parent. Simple direct control without leaderboard distractions.
+              </p>
+            </button>
+          </div>
+        </div>
+
+        {/* Title Input */}
         <div>
           <label className="block text-xs font-extrabold uppercase text-amber-400 tracking-wider mb-1.5">
             Quiz Title
@@ -136,7 +181,7 @@ export function QuizCreator({ onCreateRoom }: QuizCreatorProps) {
             type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder="e.g. Class 2 EVS - Plants"
+            placeholder="e.g. Class 2 EVS Competition"
             className="w-full bg-slate-950 border-2 border-slate-700 focus:border-amber-400 rounded-xl px-4 py-3 text-lg font-bold text-white outline-none transition-colors"
           />
         </div>
@@ -310,7 +355,7 @@ export function QuizCreator({ onCreateRoom }: QuizCreatorProps) {
         <div>
           <h3 className="text-xl font-black text-slate-950">Quiz Ready to Launch!</h3>
           <p className="text-xs sm:text-sm font-semibold text-slate-900">
-            Click to generate a temporary room code for your child.
+            Click to generate a temporary room code for your {mode === 'multiplayer' ? 'students' : 'child'}.
           </p>
         </div>
         <button
@@ -318,7 +363,7 @@ export function QuizCreator({ onCreateRoom }: QuizCreatorProps) {
           onClick={handleFinalSubmit}
           className="px-8 py-3.5 bg-slate-950 text-amber-400 hover:bg-slate-900 font-black text-lg rounded-xl shadow-xl hover:scale-105 transition-all flex items-center justify-center gap-2"
         >
-          <span>Create Quiz Room 🚀</span>
+          <span>Launch Quiz Room 🚀</span>
         </button>
       </div>
     </div>
