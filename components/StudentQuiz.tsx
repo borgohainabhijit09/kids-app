@@ -6,7 +6,7 @@ import { QuizRoom, Question, StudentState } from '@/lib/types';
 import { subscribeToRoom, submitAnswer } from '@/lib/firebase';
 import { QuestionCard } from './QuestionCard';
 import { AnswerButton } from './AnswerButton';
-import { Sparkles, Trophy, CheckCircle2, XCircle, Clock, Zap, Users } from 'lucide-react';
+import { Trophy, CheckCircle2, XCircle, Clock, Zap, Users } from 'lucide-react';
 
 interface StudentQuizProps {
   roomCode: string;
@@ -31,11 +31,9 @@ export function StudentQuiz({
     return () => unsubscribe();
   }, [roomCode]);
 
-  // Read current student state from multi-student database map
   const myStudentState: StudentState | undefined = room?.students?.[studentId] || room?.student;
   const totalStudentsCount = room?.students ? Object.keys(room.students).length : 1;
 
-  // Calculate current rank of student
   let myRank = 1;
   if (room?.students && myStudentState) {
     const sorted = Object.values(room.students).sort((a, b) => (b.totalScore || 0) - (a.totalScore || 0));
@@ -51,7 +49,6 @@ export function StudentQuiz({
     }
   }, [room?.currentQuestion, myStudentState?.answer, room?.revealed]);
 
-  // Trigger confetti on correct reveal or finished
   useEffect(() => {
     if (!room) return;
 
@@ -77,7 +74,7 @@ export function StudentQuiz({
     return (
       <div className="text-center py-20 space-y-4">
         <div className="w-12 h-12 border-4 border-amber-400 border-t-transparent rounded-full animate-spin mx-auto" />
-        <p className="text-amber-300 font-bold">Connecting to Quiz Room {roomCode}...</p>
+        <p className="text-amber-300 font-bold">Connecting to Quizora Room {roomCode}...</p>
       </div>
     );
   }
@@ -89,22 +86,22 @@ export function StudentQuiz({
         <div className="bg-slate-900/90 border-2 border-amber-500/40 rounded-3xl p-8 shadow-2xl space-y-6">
           <div className="text-6xl animate-bounce">🎉</div>
           <div className="space-y-1">
-            <h2 className="text-3xl font-black text-white">Welcome, {studentName}!</h2>
+            <h2 className="text-3xl font-black text-white">Welcome to Quizora, {studentName}!</h2>
             <p className="text-xs text-amber-400 font-bold uppercase tracking-wider">
-              {room.mode === 'multiplayer' ? 'Classroom Competition' : '1-on-1 Dad\'s Quiz'}
+              {room.mode === 'multiplayer' ? 'Classroom Competition' : '1-on-1 Remote Quiz'}
             </p>
           </div>
 
           <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-2">
             <span className="text-xs text-slate-400 font-bold uppercase tracking-wider block">
-              Quiz Title
+              Session Title
             </span>
             <p className="text-xl font-extrabold text-white">{room.title}</p>
 
             {room.mode === 'multiplayer' && (
               <div className="pt-2 flex items-center justify-center space-x-2 text-xs text-amber-300 font-bold">
                 <Users className="w-4 h-4 text-amber-400" />
-                <span>{totalStudentsCount} Classmates in Lobby</span>
+                <span>{totalStudentsCount} Players in Arena</span>
               </div>
             )}
           </div>
@@ -120,16 +117,15 @@ export function StudentQuiz({
 
   // 2. Student Finished Screen
   if (room.status === 'finished') {
-    const totalQ = room.questions.length;
     const score = myStudentState?.totalScore || 0;
-    const rankMedal = myRank === 1 ? '🥇 1st Place Champion!' : myRank === 2 ? '🥈 2nd Place!' : myRank === 3 ? '🥉 3rd Place!' : `#${myRank} in Class`;
+    const rankMedal = myRank === 1 ? '🥇 1st Place Champion!' : myRank === 2 ? '🥈 2nd Place!' : myRank === 3 ? '🥉 3rd Place!' : `#${myRank} in Arena`;
 
     return (
       <div className="w-full max-w-lg mx-auto py-12 text-center space-y-6">
         <div className="bg-slate-900/90 border-2 border-amber-500/40 rounded-3xl p-8 shadow-2xl space-y-6">
           <div className="text-6xl">🏆</div>
           <div className="space-y-1">
-            <h2 className="text-3xl sm:text-4xl font-black text-white">Competition Complete!</h2>
+            <h2 className="text-3xl sm:text-4xl font-black text-white">Quizora Complete!</h2>
             <p className="text-lg font-black text-amber-400">{studentName}</p>
           </div>
 
@@ -140,7 +136,7 @@ export function StudentQuiz({
 
             <div>
               <span className="text-xs text-slate-400 font-bold uppercase tracking-widest block">
-                Total Score
+                Final Score
               </span>
               <div className="text-4xl font-black text-amber-400 pt-1">
                 {score.toLocaleString()} <span className="text-lg text-slate-500">pts</span>
@@ -153,7 +149,7 @@ export function StudentQuiz({
             onClick={onReset}
             className="w-full py-4 bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-300 text-slate-950 font-black text-lg rounded-2xl shadow-xl hover:scale-[1.02] transition-all"
           >
-            Play Another Competition
+            Play Another Quizora Challenge
           </button>
         </div>
       </div>
@@ -189,7 +185,7 @@ export function StudentQuiz({
         {room.mode === 'multiplayer' && (
           <div className="flex items-center space-x-1.5 bg-amber-950/80 border border-amber-500/40 px-3 py-1 rounded-full text-xs font-black text-amber-300">
             <Trophy className="w-3.5 h-3.5 text-amber-400" />
-            <span>Rank #{myRank} in Class</span>
+            <span>Rank #{myRank}</span>
           </div>
         )}
       </div>
@@ -242,7 +238,7 @@ export function StudentQuiz({
       {isAnswered && !isRevealed && (
         <div className="bg-blue-950/80 border border-blue-400/40 p-3.5 rounded-2xl text-center text-xs sm:text-sm font-bold text-blue-200 flex items-center justify-center space-x-2 animate-pulse">
           <Clock className="w-4 h-4 text-blue-300" />
-          <span>Answer submitted ✓ Waiting for Host to reveal...</span>
+          <span>Answer submitted ✓ Waiting for Host...</span>
         </div>
       )}
 

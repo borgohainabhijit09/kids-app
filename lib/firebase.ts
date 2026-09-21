@@ -9,7 +9,7 @@ import {
   onDisconnect,
   Database
 } from 'firebase/database';
-import { QuizRoom, Question, StudentState, QuizMode } from './types';
+import { QuizRoom, Question, StudentState, QuizMode, QuizTemplate } from './types';
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -57,6 +57,7 @@ export function calculateQuestionScore(
 
 // Fallback memory store
 const memoryRooms: Record<string, QuizRoom> = {};
+const memoryTemplates: Record<string, QuizTemplate> = {};
 const memoryListeners: Record<string, Set<(room: QuizRoom | null) => void>> = {};
 
 function notifyMemoryListeners(code: string) {
@@ -70,7 +71,10 @@ function notifyMemoryListeners(code: string) {
 export async function createRoom(
   title: string,
   questions: Question[],
-  mode: QuizMode = 'multiplayer'
+  mode: QuizMode = 'multiplayer',
+  tenantId: string = 'public',
+  createdBy: string = 'anonymous',
+  category: string = 'General'
 ): Promise<string> {
   const code = generateRoomCode();
   const newRoom: QuizRoom = {
@@ -78,6 +82,10 @@ export async function createRoom(
     title,
     mode,
     status: 'waiting',
+    tenantId,
+    createdBy,
+    category,
+    isPublic: tenantId === 'public',
     currentQuestion: 0,
     questionStartTime: null,
     revealed: false,
@@ -99,6 +107,49 @@ export async function createRoom(
   }
 
   return code;
+}
+
+// Save a reusable Quiz Template
+export async function saveQuizTemplate(
+  template: Omit<QuizTemplate, 'id' | 'createdAt'>
+): Promise<string> {
+  const templateId = `tpl_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`;
+  const newTemplate: QuizTemplate = {
+    ...template,
+    id: templateId,
+    createdAt: Date.now(),
+  };
+
+  memoryTemplates[templateId] = newTemplate;
+
+  if (db) {
+    try {
+      const tplRef = ref(db, `templates/${templateId}`);
+      await set(tplRef, newTemplate);
+    } catch (e) {
+      console.warn('Using memory fallback for saving template:', e);
+    }
+  }
+
+  return templateId;
+}
+
+// Fetch saved templates by tenant
+export async function getQuizTemplates(tenantId: string = 'public'): Promise<QuizTemplate[]> {
+  if (db) {
+    try {
+      const tplsRef = ref(db, 'templates');
+      const snapshot = await get(tplsRef);
+      if (snapshot.exists()) {
+        const val = snapshot.val() as Record<string, QuizTemplate>;
+        return Object.values(val).filter((t) => t.isPublic || t.tenantId === tenantId);
+      }
+    } catch (e) {
+      console.warn('Error fetching templates from Firebase:', e);
+    }
+  }
+
+  return Object.values(memoryTemplates).filter((t) => t.isPublic || t.tenantId === tenantId);
 }
 
 // Subscribe to real-time room changes
@@ -174,7 +225,6 @@ export async function joinRoom(
         return { success: false, error: 'This quiz competition has already finished.' };
       }
 
-      // Check if student already exists in room
       const existingStudent = roomData.students?.[studentId];
       if (existingStudent) {
         newStudentState.totalScore = existingStudent.totalScore || 0;
@@ -198,7 +248,6 @@ export async function joinRoom(
     }
   }
 
-  // Memory fallback
   if (memoryRooms[cleanCode]) {
     if (!memoryRooms[cleanCode].students) {
       memoryRooms[cleanCode].students = {};
@@ -302,7 +351,7 @@ export async function submitAnswer(
   }
 }
 
-// Host reveals answer & calculates speed-based scores for all students
+// Host reveals answer & calculates speed-based scores
 export async function revealAnswer(code: string): Promise<void> {
   const cleanCode = code.trim().toUpperCase();
 

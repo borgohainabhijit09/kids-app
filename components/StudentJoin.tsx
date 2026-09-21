@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { joinRoom } from '@/lib/firebase';
-import { Sparkles, ArrowRight, AlertCircle, User, KeyRound } from 'lucide-react';
+import { ArrowRight, AlertCircle, User, KeyRound, Zap } from 'lucide-react';
 
 interface StudentJoinProps {
   initialCode?: string;
@@ -19,8 +19,7 @@ export function StudentJoin({ initialCode = '', onJoined }: StudentJoinProps) {
     if (initialCode) {
       setCode(initialCode.toUpperCase());
     }
-    // Read saved name from local storage if available
-    const savedName = localStorage.getItem('dads_quiz_student_name');
+    const savedName = localStorage.getItem('quizora_student_name');
     if (savedName) {
       setName(savedName);
     }
@@ -36,22 +35,21 @@ export function StudentJoin({ initialCode = '', onJoined }: StudentJoinProps) {
       return;
     }
     if (!cleanName) {
-      setError('Please enter your name so your teacher/dad knows who you are!');
+      setError('Please enter your name to join the Quizora Arena!');
       return;
     }
 
     setLoading(true);
     setError(null);
 
-    // Read or generate persistent student ID
-    let studentId = localStorage.getItem('dads_quiz_student_id') || undefined;
+    let studentId = localStorage.getItem('quizora_student_id') || undefined;
 
     const res = await joinRoom(cleanCode, cleanName, studentId);
     setLoading(false);
 
     if (res.success && res.studentId) {
-      localStorage.setItem('dads_quiz_student_name', cleanName);
-      localStorage.setItem('dads_quiz_student_id', res.studentId);
+      localStorage.setItem('quizora_student_name', cleanName);
+      localStorage.setItem('quizora_student_id', res.studentId);
       onJoined(cleanCode, res.studentId, cleanName);
     } else {
       setError(res.error || 'Could not join room. Please double-check the code!');
@@ -61,20 +59,19 @@ export function StudentJoin({ initialCode = '', onJoined }: StudentJoinProps) {
   return (
     <div className="w-full max-w-md mx-auto py-6 sm:py-12 text-center space-y-6">
       <div className="w-20 h-20 mx-auto rounded-3xl bg-gradient-to-tr from-amber-500 via-amber-400 to-yellow-300 flex items-center justify-center shadow-2xl shadow-amber-500/30 scale-105">
-        <span className="text-4xl">🎓</span>
+        <Zap className="w-10 h-10 text-slate-950 font-black fill-current" />
       </div>
 
       <div className="space-y-1">
         <h1 className="text-3xl sm:text-4xl font-black text-white tracking-tight">
-          Join Quiz Competition!
+          Quizora Player Arena
         </h1>
         <p className="text-xs sm:text-sm text-slate-300 font-medium">
-          Enter your name and room code to start playing.
+          Enter your name and room code to compete!
         </p>
       </div>
 
       <form onSubmit={handleJoin} className="bg-slate-900/95 border-2 border-amber-500/40 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-5">
-        {/* Name Input */}
         <div className="text-left space-y-1.5">
           <label className="block text-xs font-black uppercase text-amber-400 tracking-wider flex items-center gap-1.5">
             <User className="w-3.5 h-3.5 text-amber-400" />
@@ -93,11 +90,10 @@ export function StudentJoin({ initialCode = '', onJoined }: StudentJoinProps) {
           />
         </div>
 
-        {/* Code Input */}
         <div className="text-left space-y-1.5">
           <label className="block text-xs font-black uppercase text-amber-400 tracking-wider flex items-center gap-1.5">
             <KeyRound className="w-3.5 h-3.5 text-amber-400" />
-            <span>Enter Room Code</span>
+            <span>Enter Quizora Room Code</span>
           </label>
           <input
             type="text"
@@ -128,7 +124,7 @@ export function StudentJoin({ initialCode = '', onJoined }: StudentJoinProps) {
             <div className="w-6 h-6 border-3 border-slate-950 border-t-transparent rounded-full animate-spin" />
           ) : (
             <>
-              <span>Join Competition</span>
+              <span>Enter Arena</span>
               <ArrowRight className="w-6 h-6 stroke-[3]" />
             </>
           )}

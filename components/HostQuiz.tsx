@@ -12,7 +12,7 @@ import {
 } from '@/lib/firebase';
 import { QuestionCard } from './QuestionCard';
 import { AnswerButton } from './AnswerButton';
-import { Copy, Check, Users, Play, Eye, ArrowRight, Flag, Trophy, Award, Zap } from 'lucide-react';
+import { Copy, Check, Users, Play, Eye, ArrowRight, Flag, Trophy, Zap } from 'lucide-react';
 
 interface HostQuizProps {
   roomCode: string;
@@ -30,7 +30,6 @@ export function HostQuiz({ roomCode, onReset }: HostQuizProps) {
     return () => unsubscribe();
   }, [roomCode]);
 
-  // Trigger podium confetti on finish
   useEffect(() => {
     if (room?.status === 'finished') {
       confetti({
@@ -45,12 +44,11 @@ export function HostQuiz({ roomCode, onReset }: HostQuizProps) {
     return (
       <div className="text-center py-16 space-y-4">
         <div className="w-12 h-12 border-4 border-amber-400 border-t-transparent rounded-full animate-spin mx-auto" />
-        <p className="text-amber-300 font-bold">Connecting to Quiz Room {roomCode}...</p>
+        <p className="text-amber-300 font-bold">Connecting to Quizora Host Studio ({roomCode})...</p>
       </div>
     );
   }
 
-  // Helper arrays for multi-student support
   const studentsList: StudentState[] = room.students
     ? Object.values(room.students)
     : room.student
@@ -59,8 +57,6 @@ export function HostQuiz({ roomCode, onReset }: HostQuizProps) {
 
   const connectedStudents = studentsList.filter((s) => s.connected);
   const answeredStudents = studentsList.filter((s) => s.answered);
-
-  // Ranked students for leaderboard
   const rankedStudents = [...studentsList].sort((a, b) => (b.totalScore || 0) - (a.totalScore || 0));
 
   const currentQIndex = room.currentQuestion || 0;
@@ -94,13 +90,20 @@ export function HostQuiz({ roomCode, onReset }: HostQuizProps) {
     await endQuiz(roomCode);
   };
 
-  // 1. Waiting Room / Multi-Student Lobby View
+  // 1. Waiting Room / Lobby View
   if (room.status === 'waiting' || room.status === 'ready') {
     return (
       <div className="w-full max-w-3xl mx-auto space-y-8 py-6 text-center">
         <div className="bg-slate-900/90 border-2 border-amber-500/40 rounded-3xl p-8 shadow-2xl space-y-6">
-          <div className="inline-block bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs font-black uppercase px-4 py-1.5 rounded-full tracking-wider">
-            {room.mode === 'multiplayer' ? '🏫 Classroom Competition Lobby' : '👨‍👦 1-on-1 Quiz Lobby'}
+          <div className="flex items-center justify-center space-x-2">
+            <span className="bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs font-black uppercase px-4 py-1 rounded-full tracking-wider">
+              ⚡ Quizora Host Studio
+            </span>
+            {room.category && (
+              <span className="bg-slate-950 border border-slate-800 text-slate-300 text-xs font-bold px-3 py-1 rounded-full">
+                {room.category}
+              </span>
+            )}
           </div>
 
           <h2 className="text-3xl font-black text-white">{room.title}</h2>
@@ -108,13 +111,13 @@ export function HostQuiz({ roomCode, onReset }: HostQuizProps) {
           {/* Large Room Code Box */}
           <div className="bg-slate-950 p-6 rounded-2xl border border-slate-800 space-y-2">
             <span className="text-xs text-slate-400 font-bold uppercase tracking-widest block">
-              Share Room Code
+              Quizora Room Code
             </span>
             <div className="text-5xl sm:text-6xl font-black font-mono tracking-widest text-amber-400 drop-shadow-md">
               {roomCode}
             </div>
             <p className="text-xs sm:text-sm text-slate-300 font-medium pt-1">
-              Ask students to open <span className="font-mono text-amber-300 font-bold">/play</span> and enter code <strong className="text-amber-400">{roomCode}</strong>.
+              Ask participants to open <span className="font-mono text-amber-300 font-bold">/play</span> and enter code <strong className="text-amber-400">{roomCode}</strong>.
             </p>
           </div>
 
@@ -127,12 +130,12 @@ export function HostQuiz({ roomCode, onReset }: HostQuizProps) {
             {copied ? (
               <>
                 <Check className="w-4 h-4 text-emerald-400" />
-                <span className="text-emerald-400">Link Copied! ({window.location.origin}/play?code={roomCode})</span>
+                <span className="text-emerald-400">Quizora Link Copied! ({window.location.origin}/play?code={roomCode})</span>
               </>
             ) : (
               <>
                 <Copy className="w-4 h-4 text-amber-400" />
-                <span>Copy Share Link</span>
+                <span>Copy Quizora Player Link</span>
               </>
             )}
           </button>
@@ -142,7 +145,7 @@ export function HostQuiz({ roomCode, onReset }: HostQuizProps) {
             <div className="flex items-center justify-between px-1">
               <span className="text-xs font-extrabold uppercase text-amber-400 flex items-center gap-1.5">
                 <Users className="w-4 h-4" />
-                <span>Joined Students ({studentsList.length})</span>
+                <span>Connected Participants ({studentsList.length})</span>
               </span>
               <span className="text-xs text-slate-400 font-medium">
                 {connectedStudents.length} Online
@@ -151,7 +154,7 @@ export function HostQuiz({ roomCode, onReset }: HostQuizProps) {
 
             {studentsList.length === 0 ? (
               <div className="bg-slate-950/60 border border-slate-800 rounded-2xl p-6 text-center text-slate-500 text-sm">
-                ⏳ Waiting for students to join on their devices...
+                ⏳ Waiting for participants to join on their devices...
               </div>
             ) : (
               <div className="bg-slate-950/60 border border-slate-800 rounded-2xl p-4 flex flex-wrap gap-2.5 max-h-48 overflow-y-auto">
@@ -179,16 +182,15 @@ export function HostQuiz({ roomCode, onReset }: HostQuizProps) {
             className="w-full py-4 bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-300 text-slate-950 font-black text-xl rounded-2xl shadow-xl shadow-amber-500/20 hover:scale-[1.02] transition-all flex items-center justify-center gap-2"
           >
             <Play className="w-6 h-6 fill-current" />
-            <span>Start Competition ({studentsList.length} Players)</span>
+            <span>Start Quizora Session ({studentsList.length} Players)</span>
           </button>
         </div>
       </div>
     );
   }
 
-  // 2. Finished View — Grand Winner Podium Ceremony
+  // 2. Finished View — Winner Podium Ceremony
   if (room.status === 'finished') {
-    const totalQ = room.questions.length;
     const firstPlace = rankedStudents[0];
     const secondPlace = rankedStudents[1];
     const thirdPlace = rankedStudents[2];
@@ -198,14 +200,13 @@ export function HostQuiz({ roomCode, onReset }: HostQuizProps) {
         <div className="bg-slate-900/95 border-2 border-amber-500/40 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-8">
           <div className="space-y-2">
             <span className="text-xs font-black uppercase text-amber-400 tracking-widest">
-              Competition Ended
+              Quizora Session Complete
             </span>
             <h2 className="text-3xl sm:text-4xl font-black text-white">🏆 Winner Podium</h2>
           </div>
 
           {/* 3D Podium Layout */}
           <div className="flex items-end justify-center gap-2 sm:gap-4 pt-8 pb-4 min-h-[220px]">
-            {/* 2nd Place */}
             {secondPlace && (
               <div className="flex flex-col items-center flex-1 max-w-[120px]">
                 <div className="text-xs font-black text-slate-300 mb-1 truncate w-full">
@@ -220,7 +221,6 @@ export function HostQuiz({ roomCode, onReset }: HostQuizProps) {
               </div>
             )}
 
-            {/* 1st Place (Center Grand Winner) */}
             {firstPlace && (
               <div className="flex flex-col items-center flex-1 max-w-[140px] -mt-6">
                 <div className="text-sm font-black text-amber-300 mb-1 truncate w-full animate-bounce">
@@ -235,7 +235,6 @@ export function HostQuiz({ roomCode, onReset }: HostQuizProps) {
               </div>
             )}
 
-            {/* 3rd Place */}
             {thirdPlace && (
               <div className="flex flex-col items-center flex-1 max-w-[120px]">
                 <div className="text-xs font-black text-amber-600 mb-1 truncate w-full">
@@ -254,7 +253,7 @@ export function HostQuiz({ roomCode, onReset }: HostQuizProps) {
           {/* Full Classroom Final Standings Table */}
           <div className="bg-slate-950/80 border border-slate-800 rounded-2xl p-4 text-left space-y-3">
             <h3 className="text-xs font-black uppercase text-amber-400 tracking-wider">
-              Full Standings ({rankedStudents.length} Students)
+              Quizora Final Standings ({rankedStudents.length} Participants)
             </h3>
             <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
               {rankedStudents.map((st, idx) => (
@@ -283,7 +282,7 @@ export function HostQuiz({ roomCode, onReset }: HostQuizProps) {
             onClick={onReset}
             className="w-full py-4 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-lg rounded-2xl shadow-xl transition-all"
           >
-            Create Another Quiz Competition
+            Create Another Quizora Session
           </button>
         </div>
       </div>
@@ -295,7 +294,6 @@ export function HostQuiz({ roomCode, onReset }: HostQuizProps) {
 
   const letterLabels: ('A' | 'B' | 'C' | 'D')[] = ['A', 'B', 'C', 'D'];
 
-  // Count distribution of answers for current question
   const optionCounts = [0, 0, 0, 0];
   studentsList.forEach((st) => {
     if (st.answered && st.answer !== null && st.answer >= 0 && st.answer < 4) {
@@ -310,11 +308,10 @@ export function HostQuiz({ roomCode, onReset }: HostQuizProps) {
         <div className="flex items-center space-x-2">
           <span className="w-3 h-3 rounded-full bg-emerald-400 animate-ping" />
           <span className="text-xs sm:text-sm font-bold text-slate-300">
-            Students Connected: <strong className="text-emerald-400">{connectedStudents.length} / {studentsList.length}</strong>
+            Active Participants: <strong className="text-emerald-400">{connectedStudents.length} / {studentsList.length}</strong>
           </span>
         </div>
 
-        {/* Live Answer Progress Counter */}
         <div className="text-xs sm:text-sm font-extrabold flex items-center space-x-2">
           <span className="text-amber-400 bg-amber-950/80 border border-amber-500/30 px-3.5 py-1.5 rounded-full">
             ⏳ Answers Received: <strong>{answeredStudents.length} / {studentsList.length}</strong>
@@ -352,7 +349,7 @@ export function HostQuiz({ roomCode, onReset }: HostQuizProps) {
                   </span>
                 )}
                 <span className="text-xs font-black bg-slate-950 text-amber-300 border border-slate-700 px-2.5 py-1 rounded-lg shadow">
-                  {count} {count === 1 ? 'student' : 'students'}
+                  {count} {count === 1 ? 'answer' : 'answers'}
                 </span>
               </div>
             </div>
@@ -360,16 +357,16 @@ export function HostQuiz({ roomCode, onReset }: HostQuizProps) {
         })}
       </div>
 
-      {/* Live Classroom Leaderboard View (Shown after parent reveals answer) */}
+      {/* Live Classroom Leaderboard View */}
       {room.revealed && (
         <div className="bg-slate-900/95 border-2 border-amber-500/40 rounded-2xl p-5 shadow-2xl space-y-3">
           <div className="flex items-center justify-between">
             <h3 className="text-base font-black text-amber-300 flex items-center gap-2">
               <Trophy className="w-5 h-5 text-amber-400" />
-              <span>Current Leaderboard (Ranked by Speed & Accuracy)</span>
+              <span>Quizora Leaderboard (Speed & Accuracy)</span>
             </h3>
             <span className="text-xs text-amber-400/90 font-bold flex items-center gap-1">
-              <Zap className="w-3.5 h-3.5" /> Speed Bonus Active
+              <Zap className="w-3.5 h-3.5 fill-current" /> Speed Bonus Active
             </span>
           </div>
 
@@ -393,7 +390,7 @@ export function HostQuiz({ roomCode, onReset }: HostQuizProps) {
                     <div className="font-mono text-amber-400">{st.totalScore.toLocaleString()} pts</div>
                     {st.lastPointsGained > 0 && (
                       <div className="text-[10px] text-emerald-400 font-semibold">
-                        +${st.lastPointsGained} pts ⚡
+                        +{st.lastPointsGained} pts ⚡
                       </div>
                     )}
                   </div>
@@ -412,7 +409,7 @@ export function HostQuiz({ roomCode, onReset }: HostQuizProps) {
           className="w-full sm:w-auto px-4 py-2.5 rounded-xl text-xs font-bold text-rose-400 bg-slate-950 border border-rose-500/30 hover:bg-rose-950/30 flex items-center justify-center gap-1.5"
         >
           <Flag className="w-4 h-4" />
-          End Competition
+          End Session
         </button>
 
         <div className="flex items-center space-x-3 w-full sm:w-auto">
@@ -432,7 +429,7 @@ export function HostQuiz({ roomCode, onReset }: HostQuizProps) {
               className="w-full sm:w-auto px-6 py-3 rounded-xl font-black text-base bg-gradient-to-r from-emerald-500 to-teal-400 text-slate-950 hover:scale-105 transition-all shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2"
             >
               <span>
-                {currentQIndex + 1 >= room.questions.length ? 'Finish Competition 🎉' : 'Next Question'}
+                {currentQIndex + 1 >= room.questions.length ? 'Finish Session 🎉' : 'Next Question'}
               </span>
               <ArrowRight className="w-5 h-5" />
             </button>

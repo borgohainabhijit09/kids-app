@@ -25,18 +25,31 @@ export interface StudentState {
   totalScore: number; // Cumulative points across all questions
 }
 
+export interface QuizTemplate {
+  id: string;
+  title: string;
+  category: string;
+  tenantId: string;
+  createdBy: string;
+  isPublic: boolean;
+  questions: Question[];
+  createdAt: number;
+}
+
 export interface QuizRoom {
   id?: string;
   title: string;
   mode: QuizMode;
   status: RoomStatus;
+  tenantId?: string; // Multi-tenant organization / tenant identifier
+  createdBy?: string; // Creator user or 'anonymous'
+  category?: string; // e.g. EVS, Math, GK, Science
+  isPublic?: boolean;
   currentQuestion: number;
   questionStartTime: number | null; // Timestamp when active question started
   revealed: boolean;
   createdAt: number;
   questions: Question[];
-  // Map of student ID to student state (or single student fallback)
   students?: Record<string, StudentState>;
-  // Backwards compatibility single student alias
   student?: StudentState;
 }

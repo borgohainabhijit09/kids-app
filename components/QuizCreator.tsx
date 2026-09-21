@@ -2,17 +2,20 @@
 
 import React, { useState } from 'react';
 import { Question, QuizMode } from '@/lib/types';
-import { DEMO_QUIZZES } from '@/lib/demoData';
-import { Plus, Trash2, ArrowUp, ArrowDown, Sparkles, School, User } from 'lucide-react';
+import { QUIZORA_PRESETS } from '@/lib/demoData';
+import { saveQuizTemplate } from '@/lib/firebase';
+import { Plus, Trash2, ArrowUp, ArrowDown, Sparkles, School, User, BookmarkCheck, Check } from 'lucide-react';
 
 interface QuizCreatorProps {
-  onCreateRoom: (title: string, questions: Question[], mode: QuizMode) => void;
+  onCreateRoom: (title: string, questions: Question[], mode: QuizMode, category: string) => void;
 }
 
 export function QuizCreator({ onCreateRoom }: QuizCreatorProps) {
-  const [title, setTitle] = useState('Class 2 General Knowledge');
+  const [title, setTitle] = useState(QUIZORA_PRESETS[0].title);
+  const [category, setCategory] = useState(QUIZORA_PRESETS[0].category);
   const [mode, setMode] = useState<QuizMode>('multiplayer');
-  const [questions, setQuestions] = useState<Question[]>(DEMO_QUIZZES[0].questions);
+  const [questions, setQuestions] = useState<Question[]>(QUIZORA_PRESETS[0].questions);
+  const [templateSaved, setTemplateSaved] = useState(false);
 
   // Active edit state for a single question
   const [qText, setQText] = useState('');
@@ -23,12 +26,27 @@ export function QuizCreator({ onCreateRoom }: QuizCreatorProps) {
   const [correctAnswer, setCorrectAnswer] = useState<number>(1);
   const [editingId, setEditingId] = useState<string | null>(null);
 
-  const loadDemoQuiz = (index: number) => {
-    const demo = DEMO_QUIZZES[index];
-    if (demo) {
-      setTitle(demo.title);
-      setQuestions(demo.questions);
+  const loadPreset = (presetId: string) => {
+    const preset = QUIZORA_PRESETS.find((p) => p.id === presetId);
+    if (preset) {
+      setTitle(preset.title);
+      setCategory(preset.category);
+      setQuestions(preset.questions);
     }
+  };
+
+  const handleSaveAsTemplate = async () => {
+    if (!title.trim() || questions.length === 0) return;
+    await saveQuizTemplate({
+      title: title.trim(),
+      category: category.trim() || 'General',
+      tenantId: 'public',
+      createdBy: 'anonymous',
+      isPublic: true,
+      questions,
+    });
+    setTemplateSaved(true);
+    setTimeout(() => setTemplateSaved(false), 3000);
   };
 
   const handleSaveQuestion = (e: React.FormEvent) => {
@@ -94,42 +112,74 @@ export function QuizCreator({ onCreateRoom }: QuizCreatorProps) {
       alert('Please add at least 1 question to your quiz!');
       return;
     }
-    onCreateRoom(title.trim(), questions, mode);
+    onCreateRoom(title.trim(), questions, mode, category);
   };
 
   return (
     <div className="w-full max-w-4xl mx-auto space-y-8 py-4">
-      {/* Quiz Details Header Box */}
+      {/* Header & Presets Library */}
       <div className="bg-slate-900/90 border border-amber-500/30 rounded-2xl p-6 shadow-xl space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h2 className="text-2xl font-black text-white flex items-center gap-2">
-              📝 Create Quiz Room
+              ⚡ Quizora Creator Studio
             </h2>
             <p className="text-xs sm:text-sm text-slate-400">
-              Prepare objective questions for 1-on-1 playing or multi-student classroom competition!
+              Build custom quizzes or choose from our Quizora Template Library.
             </p>
           </div>
 
-          {/* Preset Pickers */}
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-xs text-amber-400 font-bold uppercase">Presets:</span>
-            {DEMO_QUIZZES.map((demo, idx) => (
+          <button
+            type="button"
+            onClick={handleSaveAsTemplate}
+            className="text-xs font-extrabold px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-500/30 transition-all flex items-center gap-1.5 shrink-0 self-start sm:self-center"
+          >
+            {templateSaved ? (
+              <>
+                <Check className="w-4 h-4 text-emerald-400" />
+                <span className="text-emerald-400">Template Saved!</span>
+              </>
+            ) : (
+              <>
+                <BookmarkCheck className="w-4 h-4 text-amber-400" />
+                <span>Save to Template Library</span>
+              </>
+            )}
+          </button>
+        </div>
+
+        {/* Quizora Template Library Cards */}
+        <div className="space-y-2">
+          <label className="block text-xs font-extrabold uppercase text-amber-400 tracking-wider">
+            Quizora Template Library
+          </label>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {QUIZORA_PRESETS.map((preset) => (
               <button
-                key={idx}
+                key={preset.id}
                 type="button"
-                onClick={() => loadDemoQuiz(idx)}
-                className="text-xs font-bold px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-amber-500 hover:text-slate-950 text-amber-300 border border-amber-500/30 transition-all flex items-center gap-1"
+                onClick={() => loadPreset(preset.id)}
+                className={`p-3.5 rounded-xl border text-left transition-all space-y-1.5 ${
+                  title === preset.title
+                    ? 'bg-amber-950/80 border-amber-400 text-white kbc-glow-gold'
+                    : 'bg-slate-950 border-slate-800 text-slate-300 hover:border-slate-700'
+                }`}
               >
-                <Sparkles className="w-3 h-3" />
-                {demo.title}
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-black uppercase text-amber-400 bg-amber-950 border border-amber-500/30 px-2 py-0.5 rounded-md">
+                    {preset.category}
+                  </span>
+                  <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                </div>
+                <h4 className="font-extrabold text-sm text-white">{preset.title}</h4>
+                <p className="text-[11px] text-slate-400 line-clamp-2">{preset.description}</p>
               </button>
             ))}
           </div>
         </div>
 
         {/* Mode Selector */}
-        <div className="space-y-2">
+        <div className="space-y-2 pt-2">
           <label className="block text-xs font-extrabold uppercase text-amber-400 tracking-wider">
             Select Game Mode
           </label>
@@ -166,24 +216,38 @@ export function QuizCreator({ onCreateRoom }: QuizCreatorProps) {
                 <span>👨‍👦 1-on-1 Dad's Quiz Mode</span>
               </div>
               <p className="text-xs text-slate-300">
-                Single student quiz with parent. Simple direct control without leaderboard distractions.
+                Single student remote quiz with parent. Simple direct control without leaderboard distractions.
               </p>
             </button>
           </div>
         </div>
 
-        {/* Title Input */}
-        <div>
-          <label className="block text-xs font-extrabold uppercase text-amber-400 tracking-wider mb-1.5">
-            Quiz Title
-          </label>
-          <input
-            type="text"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="e.g. Class 2 EVS Competition"
-            className="w-full bg-slate-950 border-2 border-slate-700 focus:border-amber-400 rounded-xl px-4 py-3 text-lg font-bold text-white outline-none transition-colors"
-          />
+        {/* Title & Category Inputs */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
+          <div className="sm:col-span-2">
+            <label className="block text-xs font-extrabold uppercase text-amber-400 tracking-wider mb-1.5">
+              Quiz Title
+            </label>
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="e.g. Class 2 EVS Competition"
+              className="w-full bg-slate-950 border-2 border-slate-700 focus:border-amber-400 rounded-xl px-4 py-2.5 text-base font-bold text-white outline-none transition-colors"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-extrabold uppercase text-amber-400 tracking-wider mb-1.5">
+              Category
+            </label>
+            <input
+              type="text"
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              placeholder="e.g. Science"
+              className="w-full bg-slate-950 border-2 border-slate-700 focus:border-amber-400 rounded-xl px-4 py-2.5 text-base font-bold text-white outline-none transition-colors"
+            />
+          </div>
         </div>
       </div>
 
@@ -277,7 +341,7 @@ export function QuizCreator({ onCreateRoom }: QuizCreatorProps) {
 
         {questions.length === 0 ? (
           <div className="text-center py-8 text-slate-500 text-sm">
-            No questions added yet. Click "Add Question" above or choose a preset.
+            No questions added yet. Click "Add Question" above or choose a template preset.
           </div>
         ) : (
           <div className="space-y-3">
@@ -353,9 +417,9 @@ export function QuizCreator({ onCreateRoom }: QuizCreatorProps) {
       {/* Start Quiz CTA Bar */}
       <div className="bg-gradient-to-r from-amber-600 via-amber-500 to-yellow-400 p-6 rounded-2xl shadow-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h3 className="text-xl font-black text-slate-950">Quiz Ready to Launch!</h3>
+          <h3 className="text-xl font-black text-slate-950">Launch Quizora Session</h3>
           <p className="text-xs sm:text-sm font-semibold text-slate-900">
-            Click to generate a temporary room code for your {mode === 'multiplayer' ? 'students' : 'child'}.
+            Generate your Quizora Room Code for real-time play & live ranking!
           </p>
         </div>
         <button
@@ -363,7 +427,7 @@ export function QuizCreator({ onCreateRoom }: QuizCreatorProps) {
           onClick={handleFinalSubmit}
           className="px-8 py-3.5 bg-slate-950 text-amber-400 hover:bg-slate-900 font-black text-lg rounded-xl shadow-xl hover:scale-105 transition-all flex items-center justify-center gap-2"
         >
-          <span>Launch Quiz Room 🚀</span>
+          <span>Launch Quizora Room 🚀</span>
         </button>
       </div>
     </div>
